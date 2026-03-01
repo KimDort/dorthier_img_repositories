@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>여행 경로 지도</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 16px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="loading" class="loading">지도를 불러오는 중...</div>
+    
+    <script>
+        // trip id는 HTML 파일명에서 가져옴
+        const tripId = "run_d991a36c056a_day1";
+        window._mapData = null;
+        window._googleMapsReady = false;
+
+        function onGoogleMapsReady() {
+            window._googleMapsReady = true;
+            maybeRenderMap();
+        }
+
+        function maybeRenderMap() {
+            if (!window._googleMapsReady || !window._mapData) return;
+            document.getElementById('loading').style.display = 'none';
+            renderMap(window._mapData);
+        }
+
+        // 깃허브에 저장된 JSON 데이터 로드 (Maps API와 무관하게 먼저 요청)
+        fetch(`./trips/${tripId}.json`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                window._mapData = data;
+                maybeRenderMap();
+            })
+            .catch(error => {
+                console.error('데이터 로드 실패:', error);
+                document.getElementById('loading').textContent = '지도 데이터를 불러올 수 없습니다.';
+            });
+
+        function renderMap(data) {
+            const map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 12,
+                center: data.markers && data.markers.length > 0 
+                    ? {lat: data.markers[0].lat, lng: data.markers[0].lng}
+                    : {lat: 37.5665, lng: 126.9780},
+                mapTypeControl: true,
+                streetViewControl: false,
+                fullscreenControl: true,
+            });
+            
+            const bounds = new google.maps.LatLngBounds();
+            
+            // 마커 표시 및 범위 확장
+            if (data.markers && data.markers.length > 0) {
+                data.markers.forEach((marker, index) => {
+                    const position = {lat: marker.lat, lng: marker.lng};
+                    
+                    // 번호가 표시된 마커 생성
+                    new google.maps.Marker({
+                        position: position,
+                        map: map,
+                        label: {
+                            text: String(index + 1),
+                            color: "white",
+                            fontWeight: "bold",
+                            fontSize: "14px"
+                        },
+                        title: marker.name || `장소 ${index + 1}`
+                    });
+                    
+                    bounds.extend(position);
+                });
+            }
+            
+            // 경로(Polyline) 그리기
+            if (data.path && data.path.length >= 2) {
+                const path = data.path.map(coord => {
+                    if (Array.isArray(coord)) {
+                        return {lat: coord[0], lng: coord[1]};
+                    }
+                    return {lat: coord.lat, lng: coord.lng};
+                });
+                
+                const polyline = new google.maps.Polyline({
+                    path: path,
+                    geodesic: true,
+                    strokeColor: "#2563eb",
+                    strokeOpacity: 1.0,
+                    strokeWeight: 5,
+                });
+                
+                polyline.setMap(map);
+            }
+            
+            // 모든 마커/경로가 보이도록 자동 줌 조절
+            if (data.markers && data.markers.length > 0) {
+                map.fitBounds(bounds);
+            }
+        }
+    </script>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA1NUFeq-TIlNsz8bdtedq-Xzv5AaaocJM&callback=onGoogleMapsReady&loading=async" async defer></script>
+</body>
+</html>
